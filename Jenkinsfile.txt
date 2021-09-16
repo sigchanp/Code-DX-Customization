@@ -1,0 +1,37 @@
+node ('master') {
+    stage('checkout') {
+        git branch: 'master', url: 'https://github.com/philipckk/insecure-bank.git'
+    }
+    stage('Polaris Analysis') {
+        def polarisStatus = polaris arguments: '--co analyze.coverity.cov-analyze="[--android-security,--all,--webapp-security]" analyze -w', polarisCli: 'POC', returnStatus: true
+    
+        if (polarisStatus == 0) {
+            print 'Success: Polaris static analysis succeeded'
+        } else {
+            print 'Failure: Analysis failed'
+        }
+    }
+    
+    withCredentials([string(credentialsId: 'poc-bd', variable: 'BD_TOKEN')]) {
+        stage('Black Duck Analysis') {
+            synopsys_detect detectProperties: '''--blackduck.api.token=$BD_TOKEN --blackduck.trust.cert=true  --blackduck.url=https://poc.blackduck.synopsys.com  --detect.maven.build.command=package  --detect.project.name=philip_insecure_bank --detect.project.version.name=1.0''', downloadStrategyOverride: [$class: 'ScriptOrJarDownloadStrategy'], returnStatus: true
+        }
+    }
+
+    withCredentials([string(credentialsId: 'poc-codedx', variable: 'CDX_TOKEN')]) {
+        stage('Code DX analyze') {
+    		step([$class: 'CodeDxPublisher', 
+    		analysisName: 'Build #${BUILD_NUMBER}', 
+    		analysisResultConfiguration: [failureOnlyNew: true, failureSeverity: 'High', numBuildsInGraph: 0, unstableOnlyNew: false, unstableSeverity: 'None'], 
+    		key: "$CDX_TOKEN", 
+    		projectId: '7', 
+    		selfSignedCertificateFingerprint: '', 
+    		excludedSourceAndBinaryFiles: '**polaris**, .synopsys/**',
+			sourceAndBinaryFiles: '**',
+    		url: 'https://poc.codedx.synopsys.com/codedx'])
+    	}
+    }
+    stage('clean') {
+        cleanWs()
+    }
+}
