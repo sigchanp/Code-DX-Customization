@@ -1,9 +1,11 @@
 node ('master') {
+    jdk = tool name: 'Java1.8'
+    env.JAVA_HOME = "${jdk}"
     stage('checkout') {
         git branch: 'master', url: 'https://github.com/philipckk/insecure-bank.git'
     }
     stage('Polaris Analysis') {
-        def polarisStatus = polaris arguments: '--co analyze.coverity.cov-analyze="[--android-security,--all,--webapp-security]" analyze -w', polarisCli: 'POC', returnStatus: true
+        def polarisStatus = polaris arguments: '--co project="{branch:master,name:my_project}" --co analyze.coverity.cov-analyze="[--android-security,--all,--webapp-security]" analyze -w -- mvn clean package -DskipTests', polarisCli: 'polaris', returnStatus: true
     
         if (polarisStatus == 0) {
             print 'Success: Polaris static analysis succeeded'
@@ -14,23 +16,32 @@ node ('master') {
     
     withCredentials([string(credentialsId: 'poc-bd', variable: 'BD_TOKEN')]) {
         stage('Black Duck Analysis') {
-            synopsys_detect detectProperties: '''--blackduck.api.token=$BD_TOKEN --blackduck.trust.cert=true  --blackduck.url=https://poc.blackduck.synopsys.com  --detect.maven.build.command=package  --detect.project.name=philip_insecure_bank --detect.project.version.name=1.0''', downloadStrategyOverride: [$class: 'ScriptOrJarDownloadStrategy'], returnStatus: true
+            synopsys_detect detectProperties: '''--blackduck.api.token=$BD_TOKEN --blackduck.trust.cert=true  --blackduck.url=https://poc.blackduck.synopsys.com  --detect.maven.build.command="package -DskipTests"  --detect.project.name=my_project --detect.project.version.name=1.0''', downloadStrategyOverride: [$class: 'ScriptOrJarDownloadStrategy'], returnStatus: true
         }
     }
-
-    withCredentials([string(credentialsId: 'poc-codedx', variable: 'CDX_TOKEN')]) {
+    
+    withCredentials([string(credentialsId: 'local-codedx-key', variable: 'CDX_TOKEN')]) {
         stage('Code DX analyze') {
+            def projID = powershell(returnStdout: true, script:"$CDX_SCRIPT/cdx_proj_creation.ps1 1 auto_demo Black_Duck_Hub_Connector my_project latest https://poc.blackduck.synopsys.com/ bd_token_masked Polaris_Connector my_project latest https://poc.polaris.synopsys.com/ polaris_token_masked 4 0 low 1")
+    		
+    		projID=projID.trim()
+    		echo "Proj ID: $projID"
+    		
     		step([$class: 'CodeDxPublisher', 
     		analysisName: 'Build #${BUILD_NUMBER}', 
-    		analysisResultConfiguration: [failureOnlyNew: true, failureSeverity: 'High', numBuildsInGraph: 0, unstableOnlyNew: false, unstableSeverity: 'None'], 
+    		//analysisResultConfiguration: [failureOnlyNew: true, failureSeverity: 'High', numBuildsInGraph: 0, unstableOnlyNew: false, unstableSeverity: 'None'], 
     		key: "$CDX_TOKEN", 
-    		projectId: '7', 
+    		projectId: "$projID", 
     		selfSignedCertificateFingerprint: '', 
     		excludedSourceAndBinaryFiles: '**polaris**, .synopsys/**',
-			sourceAndBinaryFiles: '**',
-    		url: 'https://poc.codedx.synopsys.com/codedx'])
+    		sourceAndBinaryFiles: '**', 
+    		url: 'http://poc.codedx.synopsys.com/codedx'])
+    		
+    		sh "bash -c \"$CDX_SCRIPT/sec_gate_modified.sh http://poc.codedx.synopsys.com/codedx ${projID} codedx_token_masked\""
     	}
     }
+
+    
     stage('clean') {
         cleanWs()
     }
