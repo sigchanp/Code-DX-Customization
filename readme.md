@@ -1,3 +1,6 @@
+Bash Script
+	analyze.sh makes use of https://github.com/codedx/codedx-cli-client and need to set env var SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt if Code DX is in HTTPS
+
 PowerShell module is based on https://www.powershellgallery.com/packages/codedx/1.9.5
 
 	Install-Module -Name codedx
@@ -14,3 +17,4 @@ PowerShell module is based on https://www.powershellgallery.com/packages/codedx/
 	Import-Module -name codedx -Force -Verbose
 
 	Then execute the function in PowerShell (e.g. Add-Project test)
+
