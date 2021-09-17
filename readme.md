@@ -1,4 +1,5 @@
 Bash Script
+
 	analyze.sh makes use of https://github.com/codedx/codedx-cli-client and need to set env var SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt if Code DX is in HTTPS
 
 PowerShell module is based on https://www.powershellgallery.com/packages/codedx/1.9.5
